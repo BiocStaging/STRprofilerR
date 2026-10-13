@@ -41,6 +41,7 @@ Suggests:
     readxl,
     rmarkdown,
     shiny (>= 1.8.1),
+    SummarizedExperiment,
     testthat (>= 3.0.0),
     withr,
     writexl

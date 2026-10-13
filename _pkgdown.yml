@@ -50,6 +50,10 @@ reference:
   contents:
   - STRprofilerApp
 
+- title: Data
+  contents:
+  - pdxSTRProfiles
+
 - title: Package
   contents:
   - STRprofilerR-package

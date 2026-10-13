@@ -7,10 +7,11 @@
 STRprofilerApp(database = NULL, sampleCol = "Sample", markerCol = "Marker")
 }
 \arguments{
-\item{database}{The reference database. \code{NULL}, the default, uses the
-database bundled with the package, of models from The Jackson Laboratory
-PDX program and the NCI Patient-Derived Models Repository. Otherwise a path
-to a file \code{\link[=readSTRProfiles]{readSTRProfiles()}} can read, or a \link{STRProfiles} object.}
+\item{database}{The reference database. \code{NULL}, the default, uses
+\link{pdxSTRProfiles}, the database bundled with the package, of models from The
+Jackson Laboratory PDX program and the NCI Patient-Derived Models
+Repository. Otherwise a path to a file \code{\link[=readSTRProfiles]{readSTRProfiles()}} can read, or a
+\link{STRProfiles} object.}
 
 \item{sampleCol}{Name of the sample identifier column, used when reading
 \code{database} from a file and for every file uploaded in the application.}
@@ -59,6 +60,10 @@ your own database, on Posit Connect or a Shiny Server for example, deploy an
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{STRprofilerR::STRprofilerApp(database = "my_database.csv")
 }\if{html}{\out{</div>}}
+
+A ready-made one ships with the package, at
+\code{system.file("app", "app.R", package = "STRprofilerR")}. It also attaches the
+application's suggested packages so deployment tools bundle them.
 
 From a shell, \verb{strprofilerr app --database my_database.csv} runs the same
 application locally.

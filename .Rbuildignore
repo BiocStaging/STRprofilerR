@@ -9,4 +9,4 @@
 ^\.gitattributes$
 ^LICENSE\.md$
 ^STRprofilerR\.BiocCheck$
-^deploy$
+^inst/app/rsconnect$

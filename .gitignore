@@ -50,3 +50,6 @@ rsconnect/
 
 # BiocCheck output
 *.BiocCheck/
+
+^AGENTS.md
+/deploy/

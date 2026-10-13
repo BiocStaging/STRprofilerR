@@ -95,6 +95,26 @@ test_that("Center and Passage are metadata, not markers", {
     expect_identical(colnames(sampleData(p)), c("Center", "Passage", "nDroppedCalls"))
 })
 
+test_that("metadata columns are carried through ingest", {
+    p <- readSTRProfiles(ed("Example_app_database.csv"))
+
+    expect_identical(sampleData(p)["Sample_A", "Center"], "JAX")
+    expect_identical(sampleData(p)["Sample_A", "Passage"], "P0")
+})
+
+test_that("samples sharing only metadata do not score as a partial match", {
+    p <- readSTRProfiles(ed("Example_app_database.csv"))
+    expect_identical(sampleData(p)["Sample_A", "Center"], sampleData(p)["Sample_B", "Center"])
+    expect_identical(sampleData(p)["Sample_A", "Passage"], sampleData(p)["Sample_B", "Passage"])
+
+    s <- scoreProfiles(p["Sample_A", ], p["Sample_B", ])
+
+    # 8 columns, less Center, Passage, and Amelogenin (not scored by default).
+    expect_identical(s$nSharedMarkers, 5L)
+    expect_identical(s$nSharedAlleles, 0L)
+    expect_identical(s$tanabeScore, 0)
+})
+
 test_that("uncallable calls are dropped at ingest and counted per sample", {
     p <- readSTRProfiles(ed("main_database.csv"))
 

@@ -31,8 +31,17 @@ package.
 **STRprofilerR is intended for research purposes only.** A low score is a
 prompt to investigate, not a verdict.
 
-```{r library, message = FALSE}
-library(STRprofilerR)
+# Installation
+
+You can install **STRprofilerR** from Bioconductor with:
+
+```{r install, eval = FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("STRprofilerR")
+
+# You can install the development version from Github
+pak::pak("j-andrews7/STRprofilerR")
 ```
 
 # Reading profiles
@@ -41,6 +50,7 @@ STR files typically come in one of two shapes (at least from our facility/platfo
 file has one row per sample and one column per marker:
 
 ```{r read-long}
+library(STRprofilerR)
 longFile <- system.file("extdata", "ExampleSTR_long.csv", package = "STRprofilerR")
 head(read.csv(longFile, check.names = FALSE))
 ```
@@ -109,7 +119,7 @@ markerData(profiles)
 ## Metadata
 
 Database files often carry non-marker columns. Name them in `metadataCols` and
-they fall in `sampleData()`, ignored for scoring purposes:
+they end up in `sampleData()`, ignored for scoring purposes:
 
 ```{r metadata}
 dbFile <- system.file("extdata", "main_database.csv", package = "STRprofilerR")
@@ -120,6 +130,11 @@ head(sampleData(reference), 3)
 ```
 
 If using an existing database with extra sample metadata, be sure to set this so those columns aren't used in scoring.
+
+This file is the database the Shiny application uses by default: profiles of
+patient-derived models from The Jackson Laboratory PDX program and the NCI
+Patient-Derived Models Repository. It's also provided as the
+`pdxSTRProfiles` dataset used [below](#workflow).
 
 # Scoring
 
@@ -268,6 +283,7 @@ strprofilerr compare --help
 Flags mirror the Python CLI, and both spellings are accepted, so
 `--sample-col` and `--sample_col` both work and existing invocations keep
 running.
+
 # The Shiny application
 
 For colleagues who would rather not write code, `STRprofilerApp()` serves the
@@ -293,7 +309,122 @@ The application has four tabs:
 
 From a shell, `strprofilerr app --database our_database.csv` does the same. To
 host the application for others, deploy an `app.R` that calls
-`STRprofilerR::STRprofilerApp()` with your database. 
+`STRprofilerR::STRprofilerApp()` with your database. One ships with the package,
+at `system.file("app", "app.R", package = "STRprofilerR")`.
+
+# STRprofilerR in a larger workflow {#workflow}
+
+STR authentication is rarely an end in itself. It is a quality control step that
+decides which models go on into experiments, and its results belong with the
+data those experiments produce.
+
+## Bioconductor data structures
+
+`STRProfiles` is built from `r Biocpkg("S4Vectors")` and `r Biocpkg("IRanges")`
+classes rather than bespoke ones. `sampleData()`, `markerData()`, `scores()`,
+and `summary()` all return `DataFrame`s, and each marker's alleles are a
+`CharacterList`, so the usual Bioconductor idioms for subsetting, merging, and
+list-wise operations apply. Counting the alleles each sample carries at a
+marker, for instance:
+
+```{r bioc-classes}
+lengths(alleles(batch)[["D5S818"]])
+```
+
+## The bundled PDX database
+
+`pdxSTRProfiles` holds 1,258 STR profiles from The Jackson Laboratory PDX program and the NCI
+Patient-Derived Models Repository, ready to use as a reference:
+
+```{r pdx}
+data(pdxSTRProfiles)
+pdxSTRProfiles
+
+pdxCmp <- compareProfiles(batch, pdxSTRProfiles)
+as.data.frame(summary(pdxCmp))[, c("Sample", "mixed", "topHit", "nextBest")]
+```
+
+## Generating profiles from raw data
+
+`STRProfiles()` provides the ability to build profiles
+a `data.frame` already in memory, such as the result of a LIMS query, an
+instrument export after some reshaping, or STR calls made from sequencing data
+by another tool. It needs one row per sample and one column per marker, and
+need not cover the full panel:
+
+```{r from-df}
+calls <- data.frame(
+    Sample = "PDX_042",
+    Amelogenin = "X", CSF1PO = "11", D13S317 = "9,14", D16S539 = "12",
+    D18S51 = "17", D21S11 = "29,31", D3S1358 = "15", D5S818 = "11",
+    D7S820 = "9,11", D8S1179 = "13,15", FGA = "21,22", TH01 = "9.3",
+    TPOX = "8", vWA = "14"
+)
+newModel <- STRProfiles(calls)
+
+scoreProfiles(newModel, pdxSTRProfiles, minScore = 80)
+```
+
+## Carrying authentication info with an experiment
+
+Generally, authentication is frequently performed prior to larger experiments, and these profiles may be worth carrying along with said assay data. Recording each sample's authentication result in the
+`colData` of its `r Biocpkg("SummarizedExperiment")` keeps the quality control
+with the data, so it survives subsetting and goes wherever the object goes. The
+same applies to the `colData` of a `SingleCellExperiment` or
+`MultiAssayExperiment`.
+
+In this example, the experiment's sample sheet records which model each sample should be,
+and `Sample_C` has been swapped:
+
+```{r se, eval = requireNamespace("SummarizedExperiment", quietly = TRUE), message = FALSE}
+library(SummarizedExperiment)
+
+# A stand-in for an experiment on the three models in the batch.
+counts <- matrix(
+    rpois(30, lambda = 50),
+    nrow = 10,
+    dimnames = list(paste0("gene", 1:10), rownames(batch))
+)
+
+se <- SummarizedExperiment(
+    assays = list(counts = counts),
+    colData = DataFrame(
+        model = c("J000077451", "J000077960", "J000077451"),
+        row.names = rownames(batch)
+    )
+)
+
+# Each sample's best match in the reference.
+pairs <- scores(pdxCmp)
+pairs <- pairs[order(pairs$query, -pairs$tanabeScore), ]
+best <- pairs[!duplicated(pairs$query), ]
+best <- best[match(colnames(se), best$query), ]
+
+se$strMatch <- best$reference
+se$strTanabe <- best$tanabeScore
+se$strMixed <- summary(pdxCmp)[colnames(se), "mixed"]
+se$authenticated <- se$strMatch == se$model & se$strTanabe >= 80 & !se$strMixed
+colData(se)
+
+# Keep only authenticated samples for analysis.
+se[, se$authenticated]
+```
+
+## Maintaining a reference database
+
+Once a new model is authenticated, its profile could become a reference for the
+next batch. `c()` combines `STRProfiles` objects, taking the union of their
+markers, and `writeSTRProfiles()` writes a file that `readSTRProfiles()`, the
+command line application's `--database`, and `STRprofilerApp()` can all read:
+
+```{r grow-db}
+inHouse <- c(pdxSTRProfiles, newModel)
+inHouse
+
+writeSTRProfiles(inHouse, file.path(tempdir(), "in_house_database.csv"))
+```
+
+This makes updating a reference database straightforward.
 
 # Session info
 

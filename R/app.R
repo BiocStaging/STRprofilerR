@@ -39,6 +39,10 @@
 #' STRprofilerR::STRprofilerApp(database = "my_database.csv")
 #' ```
 #'
+#' A ready-made one ships with the package, at
+#' `system.file("app", "app.R", package = "STRprofilerR")`. It also attaches the
+#' application's suggested packages so deployment tools bundle them.
+#'
 #' From a shell, `strprofilerr app --database my_database.csv` runs the same
 #' application locally.
 #'
@@ -64,10 +68,11 @@
 #'   [amelogeninMarkers()]. `strprofiler`'s application only recognises a
 #'   marker named `Amelogenin`.
 #'
-#' @param database The reference database. `NULL`, the default, uses the
-#'   database bundled with the package, of models from The Jackson Laboratory
-#'   PDX program and the NCI Patient-Derived Models Repository. Otherwise a path
-#'   to a file [readSTRProfiles()] can read, or a [STRProfiles] object.
+#' @param database The reference database. `NULL`, the default, uses
+#'   [pdxSTRProfiles], the database bundled with the package, of models from The
+#'   Jackson Laboratory PDX program and the NCI Patient-Derived Models
+#'   Repository. Otherwise a path to a file [readSTRProfiles()] can read, or a
+#'   [STRProfiles] object.
 #' @param sampleCol Name of the sample identifier column, used when reading
 #'   `database` from a file and for every file uploaded in the application.
 #' @param markerCol Name of the marker column in wide-layout files, used as
@@ -107,9 +112,10 @@ STRprofilerApp <- function(database = NULL, sampleCol = "Sample", markerCol = "M
     .requireAppPackages()
 
     if (is.null(database)) {
-        profiles <- readSTRProfiles(.extdata("main_database.csv"))
-        name <- "main_database.csv"
-    } else if (is(database, "STRProfiles")) {
+        database <- .defaultDatabase()
+    }
+
+    if (is(database, "STRProfiles")) {
         profiles <- database
         src <- provenance(database)$files
         name <- if (length(src) > 0L) paste(basename(src), collapse = ", ") else "Custom database"
@@ -149,6 +155,14 @@ STRprofilerApp <- function(database = NULL, sampleCol = "Sample", markerCol = "M
 
 .extdata <- function(f) {
     system.file("extdata", f, package = "STRprofilerR")
+}
+
+# The bundled pdxSTRProfiles dataset, loaded without touching the caller's
+# environment. Its provenance names main_database.csv, as the Python app does.
+.defaultDatabase <- function() {
+    env <- new.env(parent = emptyenv())
+    utils::data("pdxSTRProfiles", package = "STRprofilerR", envir = env)
+    env$pdxSTRProfiles
 }
 
 .appAsset <- function(f) {
